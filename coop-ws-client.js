@@ -16,20 +16,45 @@
     return p.startsWith('coopCampaignLobby/') || p.startsWith('coopRuns/');
   }
 
-  function makeSnapshot(docs) {
+  function isDocumentPath(path) {
+    return String(path || '').split('/').filter(Boolean).length % 2 === 0;
+  }
+
+  function makeQuerySnapshot(docs, collectionPath) {
     const list = Array.isArray(docs) ? docs : [];
+    const prefix = collectionPath ? `${collectionPath}/` : '';
+    const docObjs = list.map((d) => {
+      const fullPath = prefix ? `${prefix}${d.id}` : String(d.id);
+      return {
+        id: d.id,
+        ref: { path: fullPath },
+        data: () => ({ ...(d.data || {}) })
+      };
+    });
     return {
-      empty: list.length === 0,
-      size: list.length,
+      empty: docObjs.length === 0,
+      size: docObjs.length,
+      docs: docObjs,
       forEach(fn) {
-        list.forEach((d) => {
-          fn({
-            id: d.id,
-            data: () => ({ ...d.data })
-          });
-        });
+        docObjs.forEach(fn);
       }
     };
+  }
+
+  function makeDocSnapshot(docs, docPath) {
+    const row = Array.isArray(docs) && docs.length ? docs[0] : null;
+    const data = row?.data || null;
+    return {
+      exists: () => !!data,
+      data: () => (data ? { ...data } : null),
+      id: row?.id || (docPath ? docPath.split('/').pop() : ''),
+      get: (field) => (data ? data[field] : undefined)
+    };
+  }
+
+  function makeSnapshot(docs, path) {
+    if (isDocumentPath(path)) return makeDocSnapshot(docs, path);
+    return makeQuerySnapshot(docs, path);
   }
 
   const CoopWs = {
@@ -147,7 +172,7 @@
             data: () => (msg.exists ? { ...msg.data } : null)
           });
         } else if (msg.type === 'docs') {
-          p.resolve(makeSnapshot(msg.docs));
+          p.resolve(makeSnapshot(msg.docs, msg.path || ''));
         } else p.resolve(msg);
         return;
       }
@@ -156,7 +181,7 @@
         const sub = this.subs.get(msg.subId);
         if (typeof sub.cb === 'function') {
           try {
-            sub.cb(makeSnapshot(msg.docs));
+            sub.cb(makeSnapshot(msg.docs, sub.path));
           } catch (e) {
             console.warn('[coop-ws] snapshot callback', e);
           }
@@ -225,9 +250,9 @@
     const h = handlers || {};
     const preset = {
       getDocs(path) {
-        if (path === 'presets') return Promise.resolve(makeSnapshot(h.loadPresets?.() || []));
-        if (path === 'hallOfFame') return Promise.resolve(makeSnapshot(h.loadHof?.() || []));
-        return Promise.resolve(makeSnapshot([]));
+        if (path === 'presets') return Promise.resolve(makeQuerySnapshot(h.loadPresets?.() || [], path));
+        if (path === 'hallOfFame') return Promise.resolve(makeQuerySnapshot(h.loadHof?.() || [], path));
+        return Promise.resolve(makeQuerySnapshot([], path));
       },
       getDoc(path) {
         if (path.startsWith('presets/')) {
@@ -261,9 +286,9 @@
       },
       onSnapshot(path, cb) {
         const emit = () => {
-          if (path === 'presets') cb(makeSnapshot(h.loadPresets?.() || []));
-          else if (path === 'hallOfFame') cb(makeSnapshot(h.loadHof?.() || []));
-          else cb(makeSnapshot([]));
+          if (path === 'presets') cb(makeQuerySnapshot(h.loadPresets?.() || [], path));
+          else if (path === 'hallOfFame') cb(makeQuerySnapshot(h.loadHof?.() || [], path));
+          else cb(makeQuerySnapshot([], path));
         };
         emit();
         const ev = path === 'hallOfFame' ? 'render-hof-updated' : 'render-presets-updated';

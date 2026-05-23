@@ -57,13 +57,13 @@ function matchSub(subPath, changedPath) {
 }
 
 function snapshotForPath(path) {
-  const doc = getDoc(path);
-  if (doc) {
-    return [{ id: path.split('/').pop(), data: doc }];
+  const segments = path.split('/').filter(Boolean);
+  const isDocument = segments.length % 2 === 0;
+  if (isDocument) {
+    const data = getDoc(path);
+    return data ? [{ id: segments[segments.length - 1], data }] : [];
   }
-  const children = listCollection(path);
-  if (children.length) return children;
-  return [];
+  return listCollection(path);
 }
 
 function send(ws, msg) {
@@ -148,6 +148,7 @@ wss.on('connection', (ws) => {
       send(ws, {
         type: 'docs',
         id: msg.id,
+        path,
         docs: listCollection(path)
       });
       return;
