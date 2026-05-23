@@ -11201,7 +11201,7 @@
                 modal.remove();
                 return;
             }
-            if (coopDraftIsComplete() && !coopPlayerNeedsDraft(mine)) {
+            if (!coopPlayerNeedsDraft(mine) || coopDraftIsComplete()) {
                 modal.remove();
                 return;
             }
@@ -11805,7 +11805,7 @@
                 return;
             }
             const mine = coopMyPlayerRecord();
-            if (!coopPlayerNeedsDraft(mine) && coopDraftIsComplete()) {
+            if (!coopPlayerNeedsDraft(mine)) {
                 document.getElementById('coopDraftModal')?.remove();
                 return;
             }
@@ -11821,7 +11821,7 @@
             }
             const mine = coopMyPlayerRecord();
             if (!coopPlayerNeedsDraft(mine)) {
-                if (coopDraftIsComplete()) document.getElementById('coopDraftModal')?.remove();
+                document.getElementById('coopDraftModal')?.remove();
                 return;
             }
             const modalOpen = !!document.getElementById('coopDraftModal');
@@ -11903,7 +11903,7 @@
             const rosterN = coopRosterPlayers().length;
             const mine = coopMyPlayerRecord();
             if (!offers.length) return;
-            if (coopDraftIsComplete()) {
+            if (!coopPlayerNeedsDraft(mine) || coopDraftIsComplete()) {
                 document.getElementById('coopDraftModal')?.remove();
                 return;
             }
@@ -11979,7 +11979,8 @@
                     coopUpdatePrepHint();
                     if (modalEl) {
                         __coopDraftModalKey = '';
-                        if (coopDraftIsComplete()) modalEl.remove();
+                        const mineAfter = coopMyPlayerRecord();
+                        if (!coopPlayerNeedsDraft(mineAfter) || coopDraftIsComplete()) modalEl.remove();
                         else coopShowDraftModal(__coopLastRun, { force: true });
                     }
                     showToast(`${itemName} sent to shared stash (inventory full).`, 'success');
@@ -12002,7 +12003,8 @@
                 void coopSyncMainFightersFromCoop();
                 if (modalEl) {
                     __coopDraftModalKey = '';
-                    if (coopDraftIsComplete()) modalEl.remove();
+                    const mineAfter = coopMyPlayerRecord();
+                    if (!coopPlayerNeedsDraft(mineAfter) || coopDraftIsComplete()) modalEl.remove();
                     else coopShowDraftModal(__coopLastRun, { force: true });
                 }
                 showToast(`Drafted ${itemName}.`, 'success');
