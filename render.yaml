@@ -7,3 +7,9 @@ services:
     envVars:
       - key: SKIP_INSTALL_DEPS
         value: "true"
+
+  - type: web
+    name: coop-ws
+    runtime: node
+    buildCommand: npm install --prefix coop-server
+    startCommand: node coop-server/server.js

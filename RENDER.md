@@ -1,33 +1,43 @@
 # Autobattler_extra on Render
 
-Static hosting for the no-Firebase build (`index_extra.html`).
+Static game + WebSocket co-op server (no Firebase).
 
-## Repo layout
+## Services
 
-- `index_extra.html` — full game; presets/HOF in browser localStorage
-- `render-build.sh` — copies `index_extra.html` → `render-static/index.html`
-- `render.yaml` — Render Blueprint (static site)
+| Service | URL | Role |
+|---------|-----|------|
+| `autobattler-extra` | `https://autobattler-extra.onrender.com` | Game (`index_extra.html`) |
+| `coop-ws` | `wss://coop-ws.onrender.com` | Online co-op sync |
 
-## Render setup
+## Deploy
 
-1. [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**
-2. Connect **`FrostPancar/Autobattler_extra`**, branch **`main`**
-3. Apply blueprint → wait for **Live**
-4. URL: `https://autobattler-extra.onrender.com` (or name shown in dashboard)
+1. Push to `main` on [FrostPancar/Autobattler_extra](https://github.com/FrostPancar/Autobattler_extra).
+2. Render Blueprint applies `render.yaml` (both services).
+3. Wait for **both** deploys to be **Live**.
 
-## Ship updates
+## Play co-op
+
+1. Open the static site URL.
+2. Start **Campaign**.
+3. Click **Online Co-op: Off** → waits for WebSocket → **On**.
+4. Friends open the same URL and join (global lobby).
+
+Presets / Hall of Fame stay in **browser localStorage** (not shared).
+
+## Local dev
 
 ```bash
-git add index_extra.html
-git commit -m "Update game"
-git push
-```
+# Terminal 1 — co-op server
+cd coop-server && npm install && node server.js
 
-## Local test
-
-```bash
+# Terminal 2 — static files
 bash render-build.sh
-open render-static/index.html
+npx --yes serve render-static -p 8080
+# Open http://localhost:8080?coopWs=ws://localhost:10000
 ```
 
-Firebase is **not** used in this repo.
+## Limits (MVP)
+
+- Co-op state lives in server memory (resets on redeploy / sleep).
+- No Firebase; no cross-device preset sync.
+- Online PvP still hidden on this build.

@@ -2194,8 +2194,9 @@
     <script>
       // Sizing is handled inside the shader module with DPR-aware throttled resizing to avoid flicker.
     </script>
+    <script src="coop-ws-client.js"></script>
     <script>
-        // Render-hosted build: no Firebase. Presets / Hall of Fame use localStorage.
+        // Render-hosted build: no Firebase. Co-op syncs via coop-ws; presets/HOF use localStorage.
         (function initRenderHostedBackend() {
             const RENDER_LS_PRESETS = 'render_hosted_presets_v1';
             const RENDER_LS_HOF = 'render_hosted_hof_v1';
@@ -2246,101 +2247,44 @@
             };
             window.userId = localUid;
             window.appId = 'render_hosted';
-            window.collection = (_db, ...segments) => renderPathRef(...segments);
-            window.doc = (_db, ...segments) => renderPathRef(...segments);
-            window.query = (...args) => args;
-            window.orderBy = () => null;
-            window.limit = () => null;
-            window.serverTimestamp = () => Date.now();
-            window.runTransaction = async (fn) => fn({
-                get: async () => ({ exists: () => false, data: () => null }),
-                set: () => {},
-                update: () => {}
-            });
-            window.writeBatch = () => ({
-                set: () => {},
-                update: () => {},
-                delete: () => {},
-                commit: () => Promise.resolve()
-            });
-            window.getDocs = (colRef) => {
-                const path = colRef?.path || '';
-                if (path === 'presets') return Promise.resolve(renderSnapshotDocs(renderLoad(RENDER_LS_PRESETS)));
-                if (path === 'hallOfFame') return Promise.resolve(renderSnapshotDocs(renderLoad(RENDER_LS_HOF)));
-                return Promise.resolve(renderSnapshotDocs([]));
-            };
-            window.getDocsFromServer = window.getDocs;
-            window.getDoc = (docRef) => {
-                const path = docRef?.path || '';
-                if (path.startsWith('presets/')) {
-                    const id = path.split('/').slice(1).join('/');
-                    const preset = renderLoad(RENDER_LS_PRESETS).find((p) => p.id === id);
-                    return Promise.resolve({
-                        exists: () => !!preset,
-                        data: () => {
-                            if (!preset) return null;
-                            const copy = { ...preset };
-                            delete copy.id;
-                            return copy;
-                        }
-                    });
-                }
-                return Promise.resolve({ exists: () => false, data: () => null });
-            };
-            window.addDoc = (colRef, data) => {
-                const path = colRef?.path || '';
-                const id = path === 'hallOfFame'
-                    ? 'hof_' + Date.now()
-                    : 'preset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-                if (path === 'presets') {
+            const presetHooks = {
+                loadPresets: () => renderLoad(RENDER_LS_PRESETS),
+                loadHof: () => renderLoad(RENDER_LS_HOF),
+                addPreset: (data) => {
+                    const id = 'preset_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
                     const list = renderLoad(RENDER_LS_PRESETS);
                     list.push({ id, ...data });
                     renderSave(RENDER_LS_PRESETS, list);
                     renderNotify('presets');
                     return Promise.resolve({ id });
-                }
-                if (path === 'hallOfFame') {
+                },
+                addHof: (data) => {
+                    const id = 'hof_' + Date.now();
                     const list = renderLoad(RENDER_LS_HOF);
                     list.push({ id, ...data });
                     renderSave(RENDER_LS_HOF, list);
                     renderNotify('hallOfFame');
                     return Promise.resolve({ id });
-                }
-                return Promise.resolve({ id: 'noop_' + Date.now() });
-            };
-            window.setDoc = () => Promise.resolve();
-            window.updateDoc = () => Promise.resolve();
-            window.deleteDoc = (docRef) => {
-                const path = docRef?.path || '';
-                if (path.startsWith('presets/')) {
-                    const id = path.split('/').slice(1).join('/');
+                },
+                deletePreset: (id) => {
                     renderSave(RENDER_LS_PRESETS, renderLoad(RENDER_LS_PRESETS).filter((p) => p.id !== id));
                     renderNotify('presets');
                 }
-                return Promise.resolve();
-            };
-            window.onSnapshot = (colRef, cb) => {
-                const path = colRef?.path || '';
-                const emit = () => {
-                    if (typeof cb !== 'function') return;
-                    if (path === 'presets') cb(renderSnapshotDocs(renderLoad(RENDER_LS_PRESETS)));
-                    else if (path === 'hallOfFame') cb(renderSnapshotDocs(renderLoad(RENDER_LS_HOF)));
-                    else cb(renderSnapshotDocs([]));
-                };
-                emit();
-                const eventName = path === 'hallOfFame' ? 'render-hof-updated' : 'render-presets-updated';
-                if (path === 'presets' || path === 'hallOfFame') {
-                    window.addEventListener(eventName, emit);
-                    return () => window.removeEventListener(eventName, emit);
-                }
-                return () => {};
             };
 
-            console.info('Render-hosted mode: Firebase disabled; presets/HOF use localStorage.');
-            queueMicrotask(() => {
-                if (typeof balanceFlushPendingEvent === 'function') balanceFlushPendingEvent();
-                if (typeof coopSyncCampaignBarVisibility === 'function') coopSyncCampaignBarVisibility();
-            });
+            if (window.CoopWs && window.CoopWs.install) {
+                void window.CoopWs.install({ uid: localUid, ...presetHooks }).then(() => {
+                    console.info('Render-hosted: co-op WebSocket ready.');
+                    queueMicrotask(() => {
+                        if (typeof balanceFlushPendingEvent === 'function') balanceFlushPendingEvent();
+                        if (typeof coopSyncCampaignBarVisibility === 'function') coopSyncCampaignBarVisibility();
+                    });
+                });
+            } else {
+                console.warn('coop-ws-client.js missing — co-op unavailable.');
+            }
+
+            console.info('Render-hosted mode: Firebase disabled; co-op uses WebSocket when connected.');
         })();
     </script>
     <script>
@@ -8360,15 +8304,9 @@
             const nLobby = typeof opts.nLobby === 'number' ? opts.nLobby : __coopLastLobbyCount;
             const active = !!window.coopCampaignActive;
             const joining = !!__coopJoining;
-            if (window.__renderHosted && !active && !joining) {
-                btn.textContent = 'Online Co-op: Unavailable';
-                btn.disabled = false;
-                btn.setAttribute('aria-pressed', 'false');
-                btn.classList.add('btn-gradient-emerald', 'opacity-80');
-                btn.title = 'Online co-op requires Firebase. Play solo campaign on this Render build, or use the Firebase version for multiplayer.';
-                if (badge) badge.classList.add('hidden');
-                coopSyncLobbyLoadingUi();
-                return;
+            if (window.__renderHosted && !window.__coopWsConnected && !active && !joining) {
+                btn.textContent = 'Online Co-op: Connecting…';
+                btn.title = 'Connecting to co-op server…';
             }
             btn.classList.remove(
                 'ring-4', 'ring-emerald-300', 'ring-amber-300', 'opacity-70', 'coop-btn-joining',
@@ -14255,6 +14193,10 @@
                 showToast('Firebase not ready. Wait a moment and try again.', 'error');
                 return false;
             }
+            if (window.__renderHosted && !window.__coopWsConnected) {
+                showToast('Co-op server not connected. Wait or refresh the page.', 'error');
+                return false;
+            }
             coopBeginJoinUi();
             touchCoopActivity();
             const uid = window.auth.currentUser.uid;
@@ -14468,8 +14410,8 @@
             coopResetLocalState();
         }
         async function toggleCoopCampaign() {
-            if (window.__renderHosted) {
-                showToast('Online co-op needs Firebase (multiplayer sync). Solo campaign works on this Render build.', 'info');
+            if (window.__renderHosted && !window.__coopWsConnected) {
+                showToast('Co-op server not connected yet. Wait a moment or refresh.', 'error');
                 return;
             }
             if (__coopJoining) {

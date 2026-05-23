@@ -14,6 +14,7 @@ fi
 rm -rf "$PUBLISH_DIR"
 mkdir -p "$PUBLISH_DIR"
 cp "$SOURCE_INDEX" "$PUBLISH_INDEX"
+cp "$SCRIPT_DIR/coop-ws-client.js" "$PUBLISH_DIR/coop-ws-client.js"
 
 if grep -q 'Latest Deploy:' "$PUBLISH_INDEX"; then
     month="$(LC_ALL=C date '+%B')"
