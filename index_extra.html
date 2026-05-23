@@ -38,7 +38,6 @@
         .dark .hp-bar-container::before { background-image: repeating-linear-gradient(to right, transparent, transparent calc(10% - 1px), #718096 calc(10% - 1px), #718096 10%); }
 
         body.render-hosted #onlinePvpToggleBtn,
-        body.render-hosted #onlineCampaignJoinBtn,
         body.render-hosted #onlineReadyWrap,
         body.render-hosted #coopLobbyLoading,
         body.render-hosted #coopLobbyCountBadge,
@@ -8361,6 +8360,16 @@
             const nLobby = typeof opts.nLobby === 'number' ? opts.nLobby : __coopLastLobbyCount;
             const active = !!window.coopCampaignActive;
             const joining = !!__coopJoining;
+            if (window.__renderHosted && !active && !joining) {
+                btn.textContent = 'Online Co-op: Unavailable';
+                btn.disabled = false;
+                btn.setAttribute('aria-pressed', 'false');
+                btn.classList.add('btn-gradient-emerald', 'opacity-80');
+                btn.title = 'Online co-op requires Firebase. Play solo campaign on this Render build, or use the Firebase version for multiplayer.';
+                if (badge) badge.classList.add('hidden');
+                coopSyncLobbyLoadingUi();
+                return;
+            }
             btn.classList.remove(
                 'ring-4', 'ring-emerald-300', 'ring-amber-300', 'opacity-70', 'coop-btn-joining',
                 'btn-gradient-emerald'
@@ -14459,6 +14468,10 @@
             coopResetLocalState();
         }
         async function toggleCoopCampaign() {
+            if (window.__renderHosted) {
+                showToast('Online co-op needs Firebase (multiplayer sync). Solo campaign works on this Render build.', 'info');
+                return;
+            }
             if (__coopJoining) {
                 coopEndJoinUi();
                 coopSyncJoinButtonUi({ nLobby: __coopLastLobbyCount });
