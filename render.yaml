@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: autobattler-extra
+    runtime: static
+    buildCommand: bash render-build.sh
+    staticPublishPath: ./render-static
+    envVars:
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
